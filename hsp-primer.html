@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/p5.js"></script>
+   <link rel="stylesheet" href="style.css">
+    <meta charset="utf-8" />
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  }
+};
+</script>
+<script id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+</script>
+
+  </head>
+  <body>
+<h1>Quantum Fourier sampling in groups</h1>
+
+<a id="toc"><h2>Contents</h2><hr></a>
+
+<ol>
+  <li><a href="#abe-sample">Abelian Fourier sampling</a>
+  <ol>
+    <li><a href="#period">Period finding</a>
+    <li><a href="#group-I">Group theory (I)</a>
+    <li><a href="#gen-abe">Hidden abelian subgroups</a>
+    <li><a href="#rep-I">Representation theory (I)</a>
+  </ol>
+  <li><a href="#nonabe-sample">Nonabelian Fourier sampling</a>
+  <ol>
+    <li><a href="#graph">Graph symmetries</a>
+    <li><a href="#group-II">Group theory (II)</a>
+    <li><a href="#gen-nonabe">Nonabelian hidden subgroups</a>
+    <li><a href="#rep-II">Representation theory (II)</a>
+  </ol>
+</ol>
+<p style="margin:-15px 0"></p>
+<p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<a href="#refs">References</a></p>
+<p style="margin:-15px 0"></p>
+<ol type="A">
+  <li><a href="#pont">Abelian duals</a>
+  <li><a href="#blocks">Chopping blocks</a>
+</ol>
+
+<p>
+These notes attempt to capture some intuitions (formal and informal) about what quantum
+computers are good at, focused on Fourier sampling and the Hidden
+Subgroup Problem (HSP).
+The goal is to turn these insights into a natural model class for quantum
+machine learning.
+We do not assume a background in groups or representation theory,
+and introduce the necessary material along the way.
+Familiarity with basic quantum computing and algorithms, on the other hand, <i>is</i>
+assumed.
+</p>
+
+<h2><a id="abe-sample"></a> <a href="#toc">1</a>. Abelian Fourier sampling</h2><hr>
+
+<p>
+In this first part, we consider Fourier sampling on <i>abelian</i>
+groups, where the group operation is commutative. We start by
+carefully working through the illustrative problem of
+<i>period finding</i> in §<a href="#period">1.1</a>.
+We introduce some basic group theory in §<a href="#group-I">1.2</a>,
+and use the insights from period finding to motivate a quantum
+algorithm for <i>hidden abelian subgroups</i> in §<a
+href="#gen-abe">1.3</a>. Finally, in §<a href="#rep-I">1.4</a>, we
+develop the basics of <i>character theory</i> and give a clearer
+statement of what, exactly, our quantum algorithm is sampling.
+
+<h3><a id="period"></a> <a href="#toc">1.1</a>. Period finding</h3></a>
+
+<p>
+Let $\mathbb{Z}_{N}$ denote the integers with addition modulo $N$.
+  Suppose we have a function $f: \mathbb{Z}_N \to S$ which is
+<i>periodic</i>, i.e. starts
+repeating itself after some number of steps $T$, where $T$ is unknown
+in advance.
+In order for the period to fit into the clock, $T$ must divide $N$
+into $Q = N/T$ periods.<label for="sn-0" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-0" class="margin-toggle" />
+<span class="sidenote">
+This value will become important later, 
+since the quantum algorithm actually determines $Q$ from which — with knowledge of $N$ —
+we can compute the desired period $T$.
+</span>
+Below, we have a function on $\mathbb{Z}_{12}$ of period $T = 4$,
+with values of the function represented by colours:</p>
+
+<center>
+<img src="src/period.svg" alt="period" style="width:280px; margin-right:50px">
+</center>
+
+<p>Quantum computers are good at doing things in superposition and using
+interference them to extract results.
+We might hope to learn the unknown period of a function by evaluating the
+  function on all elements simultaneously, interfering them
+  appropriately, and measuring, as in the Deutsch-Jozsa algorithm or
+  Simon's problem.
+Like Simon and Deutsch-Jozsa, we work in a black box model where we
+have access to $f$ via a unitary black box, defined by
+$$
+U_f | x, 0\rangle = |x, f(x)\rangle.
+$$
+The first factor lives in a Hilbert space $\mathcal{H}_N$ whose basis
+states are labelled by elements $x \in \mathbb{Z}_N$, and the second in an
+auxuliary register labelled by $s \in S$.
+Applying the oracle to the uniform superposition $|\Psi_0\rangle$, all
+values of $f$ are obtained simultaneously:
+$$
+|\Psi_f\rangle = U_f |\Psi_0\rangle = U_f \left(\frac{1}{\sqrt{N}} \sum_{x=0}^N |x,
+0\rangle\right) = \frac{1}{\sqrt{N}} \sum_{x=0}^N |x,
+f(x)\rangle. \tag{1} \label{Psi_f1}
+$$
+In our $\mathbb{Z}_{12}$ example, we draw an outer ring of blue
+circles to represent the states $|x\rangle$, and a coloured inner ring
+to store the states $|f(x)\rangle$:
+</p>
+
+<center>
+<img src="src/period-aux2.svg" alt="period-aux" style="width:280px; margin-right:50px">
+</center>
+
+<p>
+Let us now rewrite the expression $(\ref{Psi_f1})$ a little by using the fact that it is periodic:
+
+$$
+|\Psi_f\rangle = \frac{1}{\sqrt{N}} \sum_{x=0}^N |x, f(x)\rangle = \frac{1}{\sqrt{N}}
+\sum_{r=0}^{T-1}\sum_{q=0}^{Q-1} |r + qT, f(r)\rangle.  \tag{2} \label{Psi_f2}
+$$
+
+This expression only mentions the value $r \in \{0,\ldots,T-1\}$ within the period, and 
+introduces an integer $q$ to label the periods. 
+In our $\mathbb{Z}_{12}$ example, we have $T = 4$ "triangles" of the
+same colour:
+</p>
+
+<center>
+<img src="src/period-tri.svg" alt="period-tri" style="width:280px; margin-right:50px">
+</center>
+
+<p>
+Mathematically, our triangles are states
+$$
+\begin{align*}
+|\psi_0\rangle \otimes |f(0)\rangle & = \frac{1}{\sqrt{3}}\big(|0\rangle + |4\rangle +
+|8\rangle\big)|f(0)\rangle \\
+|\psi_1\rangle \otimes |f(1)\rangle & = \frac{1}{\sqrt{3}}\big(|1\rangle + |5\rangle +
+|9\rangle\big)|f(1)\rangle \\
+|\psi_2\rangle \otimes |f(2)\rangle & = \frac{1}{\sqrt{3}}\big(|2\rangle + |6\rangle +
+|10\rangle\big)|f(2)\rangle \\
+|\psi_3\rangle \otimes |f(3)\rangle & = \frac{1}{\sqrt{3}}\big(|3\rangle + |7\rangle +
+|11\rangle\big)|f(3)\rangle,
+\end{align*}
+$$
+which are all of the form
+$$
+|\psi_r\rangle \otimes |f(r)\rangle = \frac{1}{\sqrt{3}}\big(|r\rangle
++ |r + 4\rangle +
+|r + 8\rangle\big)|f(r)\rangle. 
+$$
+Notice that this <i>set</i> of states is invariant under a shift
+$|x\rangle \mapsto |x + 1\rangle$, since this takes $|\psi_r\rangle$
+to $|\psi_{r + 1}\rangle$, and basis states $|x\rangle$ appear with
+equal amplitude.
+More formally, if we either discard or measure the second register
+$\mathcal{H}_S$, we choose a uniformly random value of $r$. This
+leaves a reduced density matrix on the first register
+$$
+\rho_f = \mbox{Tr}_S |\Psi_f\rangle\langle \Psi_f| = \frac{1}{4}\sum_{r=0}^{3}
+|\psi_r\rangle \langle \psi_r|, \quad \langle x| \rho_f |x\rangle =
+\frac{1}{4}\sum_{r=0}^4 |\langle x|\psi_r\rangle|^2 = \frac{1}{12}.
+$$
+Using $(\ref{Psi_f2})$, the same result is true for general $N$, with
+$$
+\rho_f = \mbox{Tr}_S |\Psi_f\rangle\langle \Psi_f| = \frac{1}{T}\sum_{r=0}^{T-1}
+|\psi_r\rangle \langle \psi_r|, \quad \langle x| \rho_f |x\rangle =
+\frac{1}{N}.
+\tag{3}\label{rho_f}
+$$
+How can we extract the period $T$ (or, as we mentioned, $Q$) 
+by measuring this state? 
+Measurements in the computational basis give us a uniform random $x$, 
+from which we learn nothing.
+The trick is to move to a basis of states which are <i>themselves</i>
+shift-invariant, up to a phase. It will turn out that in this basis, the 
+state $\rho_f$ only has non-zero amplitudes on those computational basis states 
+$|x\rangle$ which are multiples of $Q$. In other words, the basis change reveals 
+the desired information by interfering other basis states "away". Let's first 
+have a look at this magical basis, and then at how the interference
+works.
+</p>
+
+<p>
+We define a <b>shift operator</b> $P$ and its eigenbasis
+$|\omega\rangle$ by
+$$
+P|x\rangle = |x+1\rangle, \quad P|\chi_y\rangle = 
+\chi_y|\chi_y\rangle.
+$$
+Since $|x\rangle = |x + N\rangle = P^N|x\rangle$, it follows that
+$\chi_y^N = 1$. This means the eigenvalues are $N$th roots of unity,
+which we can label $\chi_y = \omega^{-y}_N$ for the "primitive"
+root $\omega_N = e^{2\pi i /N}$ and $y \in \mathbb{Z}_{N}$.
+If we define the eigenstates to have real overlap $\langle
+\chi_y|0\rangle = 1/\sqrt{N}$, then we can immediately construct the
+remaining coefficients using shift symmetry:
+$$
+\langle \chi_y|x\rangle = \langle \chi_y | P^x |0 \rangle = \frac{1}{\sqrt{N}}\omega_N^{xy}.
+$$
+The change of basis matrix<label for="sn-1" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-1" class="margin-toggle" />
+<span class="sidenote">
+Note that we are consider an <i>active</i> coordinate transformation,
+which maps $|x\rangle$ to its coordinates in the $|\chi_y\rangle$
+basis, and then replaces $|\chi_y\rangle$ with $|y\rangle$.
+</span>
+$F_N$, also called the <b>quantum
+Fourier transform (QFT)</b>, acts as
+$$
+F_N |\chi_y\rangle = |y\rangle, \quad F_N |x\rangle = \sum_{y=0}^N
+\langle\chi_y|x\rangle F_N|\chi_y\rangle = \frac{1}{\sqrt{N}}\sum_{y=0}^N
+\omega_N^{xy} |y\rangle. \tag{4} \label{QFT-N}
+$$
+The states $|\chi_y\rangle$ are a superposition of basis states
+$|x\rangle$ where each $|x\rangle$ gets assigned a phase.
+We will call $|\chi_y\rangle$ the <b>Fourier basis</b>.
+This phase increases regularly as we increase $x$, just like hours on
+a clock, ticking with angular size
+$2\pi y/N$ each time we increment $x$. The $y = 1$ state for
+$\mathbb{Z}_{12}$ is </p>
+
+<center>
+<img src="src/period-four.svg" alt="period-four" style="width:300px; margin-right:50px">
+</center>
+
+<p>Armed with the QFT, let's return to the task of finding the period of
+$f$.
+The density $(\ref{rho_f})$ is invariant under $P$, in the sense that $P \rho_f P^\dagger =
+\rho_f$.
+It follows that, in the Fourier basis, $\rho_f$ must consist of terms which pick up no
+phase. Since an operator $|\chi_y\rangle\langle \chi_{y'}|$
+will pick up a phase unless $y = y'$, $\rho_f$ must be diagonal in the
+Fourier basis, with some coefficients $\hat{p}_y$ we can interpret as
+probabilities. Thus, applying the QFT $(\ref{QFT-N})$:
+$$
+\rho_f = \sum_{y = 0}^{N-1} \hat{p}_y |\chi_y\rangle
+\langle \chi_y| \quad \mapsto \quad \hat{\rho}_f = F_N\rho_f F_N^\dagger = \sum_{y = 0}^{N-1} \hat{p}_y |y\rangle
+\langle y|, \tag{5} \label{hat_rho_f}
+$$
+so measurement in the computational basis yields $y$ with probability
+$\hat{p}_y$.
+Note that this is equivalent to measuring $\rho_f$ in the Fourier
+basis.
+Either way, we sample from the probability distribution $\hat{p}_y$
+(over $|\chi_y\rangle$ or $|y\rangle$ after the QFT),
+rather than $p_x$ (over $|x\rangle$).
+We use the term <b>Fourier sampling</b> for measuring with outcomes
+distributed according to $\hat{p}_y$.
+</p>
+
+<p>Our last task is to understand how $\hat{p}_y$ depends
+on the period.
+Using $(\ref{rho_f})$, we find
+$$
+\hat{p}_y = \langle \chi_y|\rho_f|\chi_y\rangle =
+\frac{1}{T}\sum_{r=0}^{T-1} | \langle \chi_y|
+\psi_r\rangle|^2. \tag{6} \label{\hat{p}_y}
+$$
+We need to compute the overlaps $|\langle \chi_y|
+\psi_r\rangle|^2$. Let's warm up with one of
+the triangles from our $\mathbb{Z}_{12}$ example:
+$$
+\begin{align*}
+\langle \chi_y| \psi_0\rangle & = \frac{1}{\sqrt{3}}\big(\langle
+\chi_y| 0\rangle + \langle \chi_y| 4\rangle + \langle
+\chi_y| 8\rangle\big) \\
+& =  \frac{1}{\sqrt{3\cdot 12}}\big(1 + \omega_{12}^{4y}+ \omega_{12}^{8y}\big)\\
+& =  \frac{1}{6}\big(1 + \omega_{3}^{y}+ \omega_{3}^{2y}\big) \\
+& = \begin{cases}
+\frac{1}{6}(1 + 1 + 1) & \text{if $y$ is a multiple of $3$} \\
+\frac{1}{6}\cdot \frac{1 -
+\omega_{3}^{3y}}{1- \omega_{3}^{y}} & \text{else}
+\end{cases} \\
+& = \begin{cases}
+\frac{1}{2} & \text{if $y$ is a multiple of $3$} \\
+0 & \text{else}.
+\end{cases}
+\end{align*}
+$$
+We used a geometric series to evaluate the case where $\omega^y_3 \neq
+1$, and note that it vanishes since $\omega_3^{3y} = 1$ for any value
+of $y$.
+This is a promising-looking pattern of constructive and destructive
+interference!
+The overlap with $|\psi_r\rangle$ is the same up to a phase, and hence
+$$
+|\langle \chi_y|\psi_r\rangle|^2 =
+\begin{cases}
+\frac{1}{4} & \text{if $y$ is a multiple of $3$}\\
+0 & \text{else }.
+\end{cases}
+$$
+As expected, this is independent of $r$, and gives $\hat{p}_y = 1/4$ just in
+case $y$ is a multiple of $3$.
+Operationally, after a few measurements we will notice we are only seeing
+multiples of $3$, from which we can conclude that the period is $T = 12/3 = 4$.
+Generalizing these results to $(\ref{\hat{p}_y})$, for any $N$, is straightforward:
+$$
+\begin{align*}
+\hat{p}_y = |\langle \chi_y | \psi_r\rangle|^2 = 
+\frac{1}{T}\delta_{y = 0 \text{ mod } Q}. \label{\hat{p}_y_N} \tag{7}
+\end{align*}
+$$
+With $O(1)$ observations, we can determine
+$Q$ to arbitrarily high probability.<label for="sn-2" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-2" class="margin-toggle" />
+<span class="sidenote">
+We guess that $Q$ is the gcd of
+the $y = kQ$ we observe. If we choose $k, k'$ "at random"
+from the integers, they will be coprime (and hence yield the correct
+$Q$) with probability $\zeta(2)^{-1} \approx 0.61$ by <a
+href="https://en.wikipedia.org/wiki/Euler_product">Euler's product formula</a>.
+</span>
+Let's summarize what we've learned:
+</p>
+
+
+<quote>
+<p>
+<b><a id="period-problem">1.1. Period finding algorithm.</b></a> Suppose we are given a
+positive integer $N$ and a function $f: \mathbb{Z}_N \to S$ with
+unknown period $T$, i.e. $f(x + T) = f(x)$ and has $T$ distinct values.
+Prepare the state
+$$
+\hat{\rho}_f = F_N \mbox{Tr}_S \big[U_f|\Psi_0\rangle\langle \Psi_0| U_f^\dagger] F_N^\dagger,
+$$
+where $|\Psi_0\rangle$ is the uniform superposition
+$$
+|\Psi_0\rangle = \frac{1}{\sqrt{N}}\sum_{x=0}^{N-1} |x, 0\rangle = F_N
+|0, 0\rangle.
+$$
+Then measurements of $\hat{\rho}_f$ in the computational basis yield
+uniformly random values $y = kQ$, for $Q = N/T$.
+</p>
+</quote>
+
+<p>
+The appearance of the correct interference pattern seems like
+magic, but is related in a deep way to symmetry.
+We start with a big cycle, $\mathbb{Z}_N$, of size $N$.
+Applying the oracle $U_f$ and tracing out $\mathcal{H}_S$ splits the
+state into branches $|\psi_r\rangle$, which we represented as
+triangles in the $\mathbb{Z}_{12}$ example, but more generally are
+$Q$-gons; we can interfere within branches but not between them.
+Going to the Fourier basis associates phases to each basis state in a
+$Q$-gon, but on a clock (in the complex plane) with $Q$ hours rather
+than $N$, since we have $Q$ symmetrically placed points.
+The vector sum of phases gives the Fourier amplitude.
+We illustrate with the $y = 1$ term for a triangle:
+</p>
+
+<center>
+<img src="src/period-interfere.svg" alt="period-int" style="width:250px; margin-right:50px">
+</center>
+
+<p>
+As we change the index $y$, we change the number of hours per tick.
+If phases point in the same direction, they constructively interfere.
+This happens when $y = kQ$ is a multiple of $Q$, for instance, when
+$y$ was a multiple of $3$ in our $\mathbb{Z}_{12}$ example:
+</p>
+
+<center>
+<img src="src/period-cons.svg" alt="period-cons" style="width:230px; margin-right:50px">
+</center>
+
+<p>
+But when they don't all point in the same direction, they
+interfere in a perfectly destructive way.
+We argued for this using a geometric series above, but there is
+a deeper reason coming from shift symmetry.
+Loosely speaking, when the phases don't all point in the same
+direction, they point in all directions symmetrically and the vector
+sum will vanish.
+Less loosely, we can observe that the different eigenvectors of the
+shift operator<label for="sn-3" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-3" class="margin-toggle" />
+<span class="sidenote">
+Or indeed, eigenvectors with different eigenvalues for any Hermitian operator.
+</span> $P$ are
+orthogonal, so the shift-invariant state $|\chi_0\rangle$ is
+orthogonal to a state $|\chi_y\rangle$ which is not shift-invariant.
+Since the inner product of $|\chi_y\rangle$ with the shift-invariant
+state $|\chi_0\rangle$ is proportional to a sum of phases, we're done,
+right?
+</p>
+
+<center>
+<img src="src/period-cons-mod.svg" alt="period-cons-mod" style="width:270px; margin-right:50px">
+</center>
+
+<p>
+Well, almost. There's the annoying fact that we are on a clock with
+$Q$ hours rather than $N$, so we are really dealing with the Fourier
+basis of $\mathbb{Z}_Q$ rather than $\mathbb{Z}_N$.
+Above, for instance, we need the orthogonality relation for the
+triangle rather than $\mathbb{Z}_{12}$, and the shift operator on
+the triangle is $P^4$, where $P$ is the shift operator for the
+underlying $12$-hour clock.
+Generally, we use orthogonality with respect to $P^T$ on
+$\mathbb{Z}_Q$, and end up with the requirement that $y = 0$ modulo $Q$,
+rather than simply $y = 0$.
+We'll reorganize these facts using elegant math in §<a href="#rep-I">1.4</a>.
+</p>
+
+<h3><a id="group-I"></a> <a href="#toc">1.2</a>. Group theory (I)</h3></a>
+
+<p>
+We're now going to describe a dramatic generalization of the
+algorithm for period finding to something called the <i>Hidden
+Subgroup Problem</i>.
+ This, includes, among other things, <a href="shor">Shor's
+algorithm</a> for breaking the internet. Before that,
+however, we'll need
+some terminology and ideas from group theory.</p>
+
+<center>
+<img src="src/group-1.svg" alt="group-1" style="width:210px; margin-right:50px">
+</center>
+
+<p>
+Symmetries are transformations which leave something looking the same,
+for instance, rotating the shape above around its centre so that
+the white vertex goes to the green.
+We note that these transformations include the trivial transformation, which does nothing;
+transformations can be done in reverse<label for="sn-4" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-4" class="margin-toggle" />
+<span class="sidenote">
+Since the object looks the same, we haven't lost any information.
+</span>; and transformations compose.
+<b>Group theory</b> turns these observations into axioms for a
+mathematical object called a <b>group</b> $(G, \cdot)$, consisting of a
+set of elements $G$ containing symmetries, and a binary operation $\cdot: G
+\times G \to G$ which captures composition of symmetries.
+The axioms corresponding to our observations are:
+<ul>
+  <li> <i>Identity.</i> There is an element $e\in G$ such that $e
+  \cdot g = g \cdot e = g$ for all $g \in G$.
+  <li> <i>Inverse.</i> For each $g \in G$, there is an element $g^{-1} \in
+  G$ such that $g \cdot g^{-1} = g^{-1} \cdot g = e$.
+  <li> <i>Associativity.</i> For all $g, g', g'' \in G$, we have $g \cdot (g'
+  \cdot g'') = (g\cdot g') \cdot g''$.
+</ul>
+<p>
+An example we've already dealt with is $(\mathbb{Z}_N, +)$, the
+integers modulo $N$ with addition. Let's check the axioms are satisfied:
+</p>
+<ul>
+  <li> The identity element is $0$, since $x + 0 = 0
+  + x = x \text{ mod } N$.
+  <li> The inverse of $x \in \mathbb{Z}_N$ is just $-x
+  = N - x \text{ mod }N$.
+  <li> Modular addition is associative since
+  regular addition is.
+</ul>
+<p>
+Modular addition has the even nicer property that it <i>commutes</i>, $x + y = y + x$.
+Not every group has this property, but if it does, we say it is
+<b>abelian</b>:
+<ul>
+  <li> <i>Abelian.</i> For all $g, g' \in G$, we have $g \cdot g' = g'
+  \cdot g$.
+</ul>
+<p>
+The rotations of the polyhedron are not abelian. Doing the green transformation then the blue transformation
+gives a very different result from the opposite order!<label for="sn-5" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-5" class="margin-toggle" />
+<span class="sidenote">
+In case you're curious, transformations here are rotations are around an
+axis from the centre of the polyhedron through a point on the surface,
+marked with a coloured "x".
+</span>
+We'll focus on abelian groups for the moment.
+</p>
+
+<center>
+<img src="src/group-2.svg" alt="group-2" style="width:210px; margin-right:50px">
+</center>
+
+<p>
+There are a few more terms we will need.
+A <b>subgroup</b> $H \leq G$ is a subset of $G$ which is closed under
+the group operation and taking of inverses, and therefore forms a
+group in its own right.
+We draw a subgroup as a peach-coloured column below.
+</p>
+
+<center>
+<img src="src/coset-0.svg" alt="coset-0" style="width:200px; margin-right:50px">
+</center>
+
+<p>
+We've already seen an example of a subgroup in the period finding
+problem, the set
+$$
+T \mathbb{Z}_N = \{ 0, T, 2T, \ldots, (Q - 1)T\}
+$$
+of multiples of $T$ modulo $N$.
+This contains the identity $0 = 0T$ and also the additive inverse $N - Tq =
+(Q - q)T$ of an element $qT$. A closely related notion is a
+<b>coset</b>, consisting of all "shifted" copies of the subgroup $H$:
+$$
+r + H = \{r + h : h \in H\}.
+$$
+We can draw this as a shifted column:
+</p>
+
+<center>
+<img src="src/coset-1.svg" alt="coset-1" style="width:170px; margin-right:50px">
+</center>
+
+<p>
+We can prove a simple but important result about cosets.
+Every element $g \in G$ is in the coset $g + H$, since $H$ includes the
+identity element. If $g'$ is in the
+coset $g + H$, then $g$ is in the coset $g' + H$, since $H$ is closed
+under inverses and hence
+$$
+g' = g + h \in g + H \quad \Longrightarrow \quad g = g' + (-h) \in g'
++ H.
+$$
+Finally, if $g \in g' + H$ and $g' \in g'' + H$, then $g \in g'' + H$,
+by associativity and the fact that $H$ is closed under the group operation:
+$$
+g = g' + h = (g'' + h') + h = g'' + (h' + h) \in g'' + H.
+$$
+We have just proved that being in the same coset is an equivalence
+relation,<label for="sn-6" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-6" class="margin-toggle" />
+<span class="sidenote">
+An <b>equivalence relation</b> $\sim$ on a set $X$ is (i) <i>reflexive</i>,
+with $x \sim x$, (ii) <i>symmetric</i>, with $x \sim y$ just in case
+$y \sim x$, and (iii) <i>transitive</i>, so $x\sim y$ and $y \sim z$
+imply $x \sim z$. This partitions $X$ into <b>equivalence
+classes</b> of $\sim$-related objects.
+</span>
+and hence distinct cosets $r + H$ partition $G$.
+These cosets have the same size, $|H|$, and since they partition $G$,
+it follows that $|H|$ must divide $|G|$.
+In fact, the reasoning applies just as well for nonabelian groups!
+This is called <b>Lagrange's theorem</b>.
+</p>
+
+<center>
+<img src="src/coset.svg" alt="coset" style="width:200px; margin-right:50px">
+</center>
+
+<p>
+We can choose a set of representatives from each coset, and assemble them
+into a set $R$. In the image above, $H$ labels rows, and $R$ labels
+columns. In abelian groups, it turns out that the cosets labelled by
+$r \in R$ have the structure of a group, called the <b>quotient
+group</b> $R = G/H$. The group operation is defined for all $g, g' \in
+G$ by
+$$
+(g + H) + (g' + H) = (g + g') + H,
+$$
+where the group operation is inherited from $G$.
+This is <i>well-defined</i> in the sense that it doesn't depend on the
+coset representatives. To check, let $g = r + h$ and $g' = r' +
+h'$, for $h, h' \in H$. Then the sum is
+$$
+(g + H) + (g' + H) = (r + H) + (r' + H) = (r + r') + H,
+$$
+and since $g + g' = (r + r') + (h  + h')$, for some $h + h' \in H$, it
+follows that $g + g'$ and $r + r'$ are in the same coset.
+</p>
+
+<p>
+Before we return to quantum computing, note that, once again, cosets
+and quotients have already appeared in the period finding problem. The
+cosets take the form
+$$
+r + T \mathbb{Z}_N = \{r + qT: q = 0, 1, \ldots, Q - 1\},
+$$
+which in turn labelled the basis states appearing in the "$Q$-gons":
+$$
+|\psi_r\rangle = \frac{1}{\sqrt{Q}} \sum_{q=0}^{Q-1} |r + qT\rangle.
+$$
+The quotient group
+$$
+\mathbb{Z}_N/T\mathbb{Z}_N = Q\mathbb{Z}_N = \{0, Q, 2Q, \ldots, (T - 1)Q\}
+$$
+is precisely the group we end up randomly sampling from.
+The last piece of group theory we need for now involves maps
+<i>between</i> groups.
+A <b>homomorphism</b> is map $\phi: G \to G'$ which "preserves structure" in the sense
+that
+$$
+\phi(g \cdot g') = \phi(g) \cdot \phi(g').
+$$
+This implies it takes the identity to the identity and inverses to
+inverses:
+$$
+\phi(0_G) = 0_{G'}, \quad \phi(g^{-1}) = \phi(g)^{-1}.
+$$
+An <b>isomorphism</b> is a homomorphism which is also a bijection,
+i.e. injective (one-to-one) and surjective (onto). If there is an
+isomorphism $\phi: G\to G'$ between groups, we say they are
+<b>isomorphic</b> and write $G
+\cong G'$.
+</p>
+
+<quote>
+<p>
+<b>1.2. Group theory (I).</b></a> A group $(G,
+\cdot)$ is a set $G$ with binary operation $\cdot: G \times G \to G$
+satisfying the following:<br>
+<span style="display:block; margin-top:10px;"></span>
+<span style="padding: 10px"></span>
+<i>• Identity.</i> There is an <i>identity</i> $e \in G$ such
+that $e \cdot g = g \cdot e = g$ for all $g\in G$. <br>
+<span style="display:block; margin-top:5px;"></span>
+<span style="padding: 10px"></span><i>• Inverse.</i> For all $g \in
+G$, there is an <i>inverse</i> $g^{-1}$ such that $g \cdot g^{-1} =
+g^{-1}\cdot g = e$. <br>
+<span style="display:block; margin-top:5px;"></span>
+<span style="padding: 10px"></span><i>• Associativity.</i> The group
+operation is associative, $g \cdot (g' \cdot g'') = (g \cdot g')\cdot g''$. <br>
+<span style="display:block; margin-top:10px;"></span>
+In addition, if the group operation commutes, $g \cdot g' = g' \cdot
+g$, we call the group <i>abelian</i>. In this case, we denote the group operation by $+$
+and the identity by $0$. <br>
+<br>
+A <i>subgroup</i> $H \leq G$ is a subset of $G$ closed under the group
+operation and taking of inverses, and therefore forms a group in its
+own right. The <i>cosets</i> with respect to $H$ are sets of the form
+$rH$ (or $r + H$ in the abelian case). They partition $G$, and since they are of equal size, $|H|$ must
+divide $|G|$. This result is called <i>Lagrange's theorem</i>.
+In abelian groups, the cosets form a <i>quotient group</i> $G/H$,
+which inherits its group operation from $G$, with $(g + H) + (g' + H)=
+(g + g') + H$.
+</p>
+</quote>
+
+<h3><a id="gen-abe"></a> <a href="#toc">1.3</a>. Hidden abelian subgroups</h3></a>
+
+<p> Let's try to rephrase the period finding problem in the language
+of group theory.
+Instead of looking for the period $T$ of a function, we can think of the
+algorithm as finding the <i>subgroup</i> $T \mathbb{Z}_N$ of $\mathbb{Z}_N$.
+We can suggestively rewrite periodicity as the condition of being
+<i>constant</i> of cosets of this subgroup:
+$$
+f(x) = f(y) \quad \text{if and only if} \quad x  \in y + T \mathbb{Z}_N.
+$$
+This suggests the following generalization: take a subgroup $H$
+of an abelian group $G$, and conceal it inside a function which is
+constant on cosets:
+
+$$
+f(x) = f(y)  \quad \text{if and only if} \quad x  \in y + H. \tag{7} \label{aHSP}
+$$
+This is called the <b>abelian Hidden Subgroup Problem (HSP)</b>.
+Our goal is to determine $H$ using a quantum computer.
+It turns out we can simply upgrade our algorithm for period finding!
+As before, we start with two registers, $\mathcal{H}_G$ and $\mathcal{H}_S$, set up the
+uniform superposition
+$$
+|\Psi_0\rangle = \frac{1}{\sqrt{|G|}}\sum_{x\in G} |x, 0\rangle.
+$$
+We then apply an oracle which records the value of $x$ into the second register:
+$$
+|\Psi_f\rangle = U_f |\Psi_0\rangle = \frac{1}{\sqrt{|G|}}\sum_{x\in G} |x, f(x)\rangle. \tag{8}\label{coset-sum1}
+$$
+In $(\ref{Psi_f2})$, we rewrote $x = r + qT$ and summed over the
+remainder $r$ and quotient $q$ instead.
+Since $r$ labels cosets, and $q$ elements of the subgroup
+$T\mathbb{Z}_{N}$, this is equivalent to splitting a sum over the
+group into a sum over columns and rows, using the picture from earlier:
+
+<center>
+<img src="src/coset.svg" alt="coset" style="width:200px; margin-right:50px">
+</center>
+
+<p>
+We can do something similar here, and recast
+$(\ref{coset-sum1})$ as
+$$
+|\Psi_f\rangle = \frac{1}{\sqrt{|G|}}\sum_{r\in R}\sum_{h\in H} |r +
+h, f(r)\rangle,
+\tag{9} \label{coset-sum2}
+$$
+using the fact that $f(x)$ is constant on cosets.
+By analogy to $|\psi_r\rangle$ above, we can lump elements of a coset
+into a superposition called a <b>coset state</b>:
+$$
+|r+H\rangle = \frac{1}{\sqrt{|H|}} \sum_{h\in H} |r + h\rangle.
+$$
+If we trace out $\mathcal{H}_S$ in $(\ref{coset-sum2})$, we arrive at
+$$
+\rho_f = \frac{1}{|R|}\sum_{r\in R} |r+H\rangle\langle r+H|. \tag{10}\label{aHSP-psi}
+$$
+We can picture this splitting into "branches" as follows:
+</p>
+
+<center>
+<img src="src/qft2.svg" alt="qft" style="width:220px; margin-right:50px">
+</center>
+
+<p>
+In the period finding algorithm, the next step was to perform the QFT and exploit
+properties of the Fourier basis, so we need to generalize the QFT to an arbitrary abelian group.
+Instead of a single shift operator $P$, we have a family $P_s|x\rangle
+= |x + s\rangle$, so the situation seems trickier. Luckily, all these shift
+operators <i>commute</i>, since
+$$
+P_s P_{s'} |x\rangle = |x + s' + s\rangle = |x + s + s'\rangle =
+P_{s'}P_s |x\rangle \quad \Longrightarrow \quad P_sP_{s'} = P_{s'}P_s.
+$$
+This means the operators $P_s$ are simultaneously diagonalizable, with a joint Fourier
+basis
+$$
+P_s |\chi_y\rangle = \frac{1}{\sqrt{|G|}}\overline{\chi_y(s)}|\chi_y\rangle, \tag{11} \label{char}
+$$
+where we have defined a function $\chi_y: G \to \mathbb{C}$ to store
+the eigenvalues for different shifts.
+Note that, since the eigenstates $|\chi_y\rangle$ form an alternative basis of
+$\mathcal{H}_G$, we can label them with computational basis elements
+$y \in G$.
+In $\mathbb{Z}_N$ this labelling was associated with an explicit
+eigenvalue, but for an arbitrary finite abelian group, it is
+arbitrary.
+What is important is that we will measure in the computational basis,
+so we need a fixed correspondence between $\chi_y$ and $y$ to tell us
+what we've observed!
+</p>
+
+<p>
+It now follows from the definition that $\chi_y(0) = \langle
+\chi_y|0\rangle = 1$, so the analogue of $(\ref{QFT-N})$ is
+$$
+F_G |\chi_y\rangle = |y\rangle, \quad F_G|x\rangle = \frac{1}{\sqrt{|G|}}\sum_{y\in
+G} \chi_y(x)|y\rangle.
+\tag{12}\label{QFT-a}
+$$
+Fourier-transforming $(\ref{aHSP-psi})$, we obtain a diagonal matrix
+for the same reasons as above:
+$$
+\hat{\rho}_f = \sum_{y\in G} \hat{p}_y |y\rangle \langle y|, \quad \hat{p}_y =
+\frac{1}{|G|}|\langle \chi_y | r+H \rangle|^2. \tag{13} \label{aHSP-hat-rho}
+$$
+We can't evaluate $\hat{p}_y$ explicitly in this case; instead, we turn to
+our "deep" reason for the emergence of constructive and destructive
+interference, namely orthogonality of eigenstates under shifts.
+What we want to understand is when the vector sum of phases on the
+coset state vanishes, and when it does not, as below:
+</p>
+
+<center>
+<img src="src/aHSP.svg" alt="aHSP" style="width:250px; margin-right:-50px">
+</center>
+
+<p>
+The condition for a general abelian group is a bit technical, but is
+essentially the same as period finding.
+Recall that, in period finding, we had to restrict a clock with $N$
+hours to a clock with $Q$ hours.
+Here, working with coset states $|r+H\rangle$ means that we
+restrict the maps $\chi_y: G \to \mathbb{C}$ to the subgroup $H$.
+This <b>restriction</b> operation is usually denoted by
+$$
+\mbox{Res}^G_H \chi_y: H \to \mathbb{C}.
+$$
+As a special case, observe that the shift-invariant
+eigenstate $|\chi_0\rangle$ corresponds to a constant function
+$\chi_0(s) = 1$, which we call $1_G$. After restriction it is still
+constant:
+$$
+\mbox{Res}^G_H \chi_0 = \mbox{Res}^G_H 1_G = 1_H.
+$$
+The states $|\mbox{Res}^G_H \chi_y \rangle$ are eigenstates of the shift operators $P_s$ for $s \in
+H$, and will be orthogonal for distinct $y$ unless the restrictions
+are equal. In particular, the overlap of $|\mbox{Res}^G_H \chi_y
+\rangle$ with the constant function vanishes,
+$$
+\left\langle \mbox{Res}^G_H \chi_y | 1_H
+\right\rangle \propto \sum_{h\in H} \chi_y(h) = 0,
+$$
+unless $\mbox{Res}^G_H \chi_0 = 1_H$.
+In period finding, the restriction took us from $\mathbb{Z}_N$ to
+$\mathbb{Z}_Q$, and the condition that $|\mbox{Res}^G_H \chi_y
+\rangle$ was constant precisely corresponded to $y = 0$ modulo $Q$.
+The general case is similar, and we can evaluate
+$(\ref{aHSP-hat-rho})$ using $|\langle 1_H|r+H\rangle| =
+\sqrt{|H|}$:
+$$
+\hat{p}_y =
+\begin{cases}
+|H|/|G|& \mbox{Res}^G_H \chi_y = 1_H \\
+0 & \text{else}.
+\end{cases} \tag{14} \label{\hat{p}_y-HSP}
+$$
+Thus, preparing the density $\hat{\rho}_f$ and measuring in the
+computational basis gives a uniformly random $y$ satisfying $\mbox{Res}^G_H \chi_y = 1_H$.
+</p>
+
+<quote>
+<p>
+<b><a id="period-problem">1.3. Abelian Fourier sampling.</b></a> Suppose we are
+given an unknown subgroup $H$ of a finite abelian group $G$, and a
+function $f: G \to S$ constant on cosets of $H$:
+$$
+f(x) = f(y) \quad \text{if and only if} \quad x \in y + H.
+$$
+Prepare the state
+$$
+\hat{\rho}_f = F_N \mbox{Tr}_S \big[U_f|\Psi_0\rangle\langle \Psi_0| U_f^\dagger] F_N^\dagger,
+$$
+where $|\Psi_0\rangle$ is the uniform superposition
+$$
+|\Psi_0\rangle = \frac{1}{\sqrt{N}}\sum_{x \in G} |x, 0\rangle = F_N
+|0, 0\rangle.
+$$
+Then measurements of $\hat{\rho}_f$ in the computational basis yield
+uniformly random values of $y$ satisfying $\mbox{Res}^G_H \chi_y =
+1_H$, i.e. eigenstates which are shift-invariant on $H$.
+</p>
+</quote>
+
+<p>
+It's straightforward to prove that sampling labels this way will let
+us determine $H$ in $O(\log|G|)$ steps.
+You can optionally read how it works in the box below. 
+</p>
+
+<proof><p>
+<i>Proof.</i> Each time we sample $y$ satisfying $\text{Res}^G_H\chi_y
+=1_H$, we can build the <b>kernel</b>
+$$
+K = \mbox{ker }\chi_y = \{x \in G: \chi_y(x) = 1\},
+$$
+which is a subgroup of $G$ containing $H$.
+As we repeat the circuit, we progressively intersect these kernels.
+If the current kernel intersection $K \neq
+H$, then with probability $\geq 1/2$, adding another kernel $K'$ will
+reduce the size of the kernel
+intersection by half:
+$$
+|K \cap K'| \leq \frac{1}{2}|K|.
+$$
+This follows from Lagrange's theorem.
+Thus, if the kernel stabilizes in size for $m$ steps, we have our hidden
+subgroup with probability $\geq 1 - (1/2)^m$.
+Since we are cutting the size in half at each step, it can fail to
+stabilize for at most $O(\log |G|)$ steps. ◾</p>
+</proof>
+
+<h3><a id="rep-I"></a> <a href="#toc">1.4</a>. Representation theory (I)</h3></a>
+
+<p>
+In the process of trying to construct a generalized QFT, we have
+stumbled onto fundamental objects called <b>characters</b>,
+namely the functions $\chi_y: G \to \mathbb{C}$ encoding eigenvalues
+under shifts.
+The characters have various nice properties, but we will choose as
+their defining mathematical property the fact that they turn sums into products:
+$$
+\chi_y(s + s') = \chi_y(s)\chi_y(s'). \tag{15} \label{char-rep}
+$$
+This is equivalent to the fact that $P_{s + s'} = P_{s'} P_{s}$ and hence
+$$
+\chi_y(s + s') |\chi_y\rangle = P_{s + s'} |\chi_y\rangle =
+P_{s'}P_s|\chi_y\rangle = \chi_y(s)\chi_y(s')|\chi_y\rangle.
+$$
+In fact, the characters of any finite abelian $G$ form a group under pointwise multiplication,<label for="sn-7" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-7" class="margin-toggle" />
+<span class="sidenote">
+This is easy to check: the pointwise product $\chi \cdot \chi'(x) =
+\chi(x)\chi(x')$ is a character, the constant character $\chi = 1_G$
+is the identity, and the inverse $\chi^{-1}(x) =
+\chi(x)^{-1}$ is taken pointwise.
+</span> called the <b>character
+group</b> $\hat{G}$.
+To get some intuition for these groups, we return to our diagram for the character $\chi_1$ in
+$\mathbb{Z}_{12}$.
+We can actually repurpose this and use it as a picture of the dual
+group $\hat{G}$, where we indicate $y$ itself, the size of the
+first tick, as we move around the clock. Under addition of "ticks", this forms a group which is identical in structure to
+$\mathbb{Z}_{12}$. We'll prove in <a href="#pont">Appendix A</a> that
+$G \cong \hat{G}$ for all finite abelian groups.
+</p>
+
+<center>
+<img src="src/ab-samp.svg" alt="aHSP" style="width:600px; margin-right:-50px">
+</center>
+
+<p>
+Characters are crucial to understand what the sampling subroutine actually
+samples from.
+In period finding, we had a hidden period $T$, or equivantly, a hidden
+subgroup $T \mathbb{Z}_N$ of $\mathbb{Z}_N$.
+Instead of giving elements of $H$, the algorithm output random
+character labels $y = kQ$.
+The labels appear to live in a different subgroup $Q
+\mathbb{Z}_N$. As we observed above, this is essentially the <i>quotient</i> with respect to
+the hidden subgroup:
+$$
+Q\mathbb{Z}_N = \mathbb{Z}_N/T\mathbb{Z}_N.
+$$
+Similarly, our abelian subroutine doesn't sample from the
+hidden subgroup $H$, but rather the character labels $y$ such that
+$\mbox{Res}^G_H \chi_y = 1_H$.
+The probability of picking a label is $\hat{p}_y = |H|/|G|$, so the
+total number is $|G|/|H|$. This is the size of the quotient group
+$G/H$, so again, we might suspect that we are sampling from the
+quotient. This suspicion is correct!
+</p>
+
+<center>
+<img src="src/quot.svg" alt="quot" style="width:600px; margin-right:-50px">
+</center>
+
+<p>
+The basic idea of the proof is as follows.
+Define the <b>annihilator</b> $H^* \leq \hat{G}$ of a subgroup $H$ as the set
+of characters whose restriction to $H$ is trivial:
+$$
+H^* = \{\chi \in \hat{G}: \mbox{Res}^G_H\chi = 1_H\}.
+$$
+Our sampling subroutine produces a random label $y \in H^*$.
+Above, for instance, we've indicated the annihilator of the triangle,
+which is isomorphic to $4\mathbb{Z}_{12} = \{0, 3, 6, 9\}$.
+This is a subgroup of $\hat{G}$ isomorphic to $\mathbb{Z}_{12}/3\mathbb{Z}_{12}$.
+More generally, we can show that for abelian groups, $H^* \cong G/H$.
+The proof is a bit tedious, so we relegate it to <a
+href="#pont">Appendix A</a>.
+But the moral is clear: our subroutine samples from the quotient $G/H$ rather than the subgroup $H$.
+</p>
+
+<quote>
+<p>
+<b><a id="period-problem">1.3. Representation theory (I).</b></a> The
+<i>dual group</i> $\hat{G}$ of an abelian group $G$ consists of the $|G|$
+<i>characters</i> satisfying
+$$
+\chi: G \to \mathrm{U}(1), \quad \chi(s + s') = \chi(s)\chi(s'),
+$$
+which form a group under pointwise multiplication.
+The <i>annihilator</i> $H^*$ of a subgroup $H \leq G$ is
+$$
+H^* = \{\chi \in \hat{G}: \mbox{Res}^G_H\chi = 1_H\}.
+$$
+For finite abelian groups, this is isomorphic to the quotient of $G$
+by $H$. Thus, the abelian subroutine
+produces a uniformly random sample $y \in H^* \cong G/H$.
+</p>
+</quote>
+
+<p>
+In summary, our sampling subroutine does starts with a uniform
+superposition, then applies the oracle, which organizes the state
+into cosets $|r+H\rangle$.
+Discarding the second register makes these coset states incoherent,
+and when we apply the QFT, interference happens <i>within</i> a coset only.
+The QFT turns group elements $|g\rangle$ into joint eigenstates $|\chi\rangle$ of $P_s$, or
+equivalently characters in the dual group $\chi\in \hat{G}$.
+Interference causes only those characters with trivial restriction on $H$ to survive.
+The annihilator subgroup $H^* \leq \hat{G}$ is, in the finite abelian case,
+isomorphic to the quotient $G/H$, and sampling quickly determines $H$.
+</p>
+
+<h2><a id="nonabe-sample"></a> <a href="#toc">2</a>. Nonabelian Fourier sampling</h2></a><hr>
+
+<p>
+In this part, we turn to <i>nonabelian</i> Fourier sampling, where the order
+in which we apply group operations matters. In §<a
+href="#graph">2.1</a>, we introduce the canonical problem of graph
+automorphisms and isomorphisms.
+We use this to motivate some additional group theory in §<a
+href="#group-II">2.2</a>.
+In §<a href="#gen-nonabe">2.3</a>, we show how to modify the abelian
+subroutine for nonabelian groups, and finally, to address our original
+graph theoretic problems, we develop the representation theory of the
+symmetric group in §<a href="#rep-II">2.4</a>
+</p>
+
+<h3><a id="graph"></a> <a href="#toc">2.1</a>. Graph symmetries</h3></a>
+
+<p>
+Consider a <b>graph</b> $\Gamma = (V, E)$, consisting of a set of
+<b>vertices</b> $V$ and <b>edges</b> connecting them, $E \subseteq V
+\times V$. The <b>automorphism group</b> of $\Gamma$, denoted
+$\text{Aut}(\Gamma)$, is the set of invertible maps (or bijections) on
+the vertices which leaves the graph structure invariant:
+$$
+\text{Aut}(\Gamma) = \{\pi: V \to V: f \text{ invertible and } \pi(E) = E\}, \tag{17}
+$$
+where $\pi(E)$ simply applies $f$ to each vertex in an edge:
+$$
+\pi(E) = \{(\pi(v_1), \pi(v_2)) : (v_1, v_2) \in E\}.
+$$
+We abbreviate the result of applying $f$ to both edges and vertices as $\pi(\Gamma)$.
+Below, we give an example of a graph which is invariant under swapping
+the red and violet vertices, the blue and yellow vertices, both, or
+doing nothing at all. We can compose and invert these swaps, and doing
+nothing is the identity, so $\text{Aut}(\Gamma)$ forms a group.
+In this case, it is isomorphic to $\mathbb{Z}_2\times
+\mathbb{Z}_2$. As above, we use blue circles to denote the group
+elements.
+</p>
+
+<center>
+<img src="src/graph.svg" alt="graph" style="width:420px; margin-right:-50px">
+</center>
+
+<p>
+In this example, the automorphism group is abelian, but in general it
+need not be.
+Below, we give a minimal example, the automorphism group of a triangle:
+</p>
+
+<center>
+<img src="src/graph2.svg" alt="graph2" style="width:360px; margin-right:-50px">
+</center>
+
+<p>
+This has six elements, corresponding to all six ways to permute three
+objects. The swaps labelling the group elements are performed from top
+to bottom. They do not commute since, for instance, swapping red and
+green, then red and purple, results in the bottom right triangle, but
+if we instead swap red and purple, then red and green, we get the
+bottom left.
+The <b>graph automorphism problem</b> is simply to determine
+$\text{Aut}(\Gamma)$. Since many problems in combinatorial
+optimization boil down to searching over graphs, and we can greatly
+reduce the search space with symmetries, this is a problem of major
+practical importance.
+</p>
+
+<p>
+A closely related question is whether two graphs are
+equivalent, called the <b>graph isomorphism problem</b>. Often, graphs
+are presented in rather different looking
+ways. Below, for instance, are two drawings of the
+<b>Petersen graph</b><label for="sn-8" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-8" class="margin-toggle" />
+<span class="sidenote">
+Counterexample to many a beautiful conjecture in graph theory.
+</span>
+which are not obviously equivalent:
+</p>
+
+<center>
+<img src="src/graph3.svg" alt="graph2" style="width:430px; margin-right:-50px">
+</center>
+
+<p>
+We have "greyed out" the vertices to indicate that we don't care how
+they are labelled.
+We want to know whether there is a way to rearrange the vertices of
+the graph on the left to obtain the graph on the right.
+In general, if $\Gamma$ and $\Gamma'$ are the graphs of interest, this
+boils down to the existence of an invertible map $\pi: V \to V'$ such that
+$\pi(E) = E'$, or $\pi(\Gamma) = \Gamma'$.
+</p>
+
+<p>
+It isn't obvious, but this can be viewed as as special case of the
+automorphism problem.
+The idea is to take a disjoint union of the two graphs, $\Gamma
+\sqcup \Gamma'$, and then compute its automorphism group.
+If the graphs are not isomorphic, we can only act on each graph
+individually, so the automorphism group is a direct product:
+$$
+\text{Aut}(\Gamma \sqcup \Gamma') = \text{Aut}(\Gamma) \times
+\text{Aut}(\Gamma').
+$$
+But if the graphs are isomorphic, we can also <i>interchange</i> them,
+so the automorphism group is twice as big!
+If $s_{\Gamma \Gamma'}$ is any automorphism exchanging $\Gamma$ and $\Gamma'$, then
+$$
+\text{Aut}(\Gamma \sqcup \Gamma') = s_{\Gamma
+\Gamma'} \circ \text{Aut}(\Gamma)^2 \sqcup  \text{Aut}(\Gamma)^2,
+$$
+i.e. we have two copies of the product of automorphism groups.<label for="sn-9" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-9" class="margin-toggle" />
+<span class="sidenote">
+We write these as $\text{Aut}(\Gamma)^2$ instead of
+$\text{Aut}(\Gamma) \times \text{Aut}(\Gamma')$ since $\Gamma \cong \Gamma'$.
+</span>
+We picture this below:
+</p>
+
+<center>
+<img src="src/graph4.svg" alt="graph4" style="width:440px; margin-right:-50px">
+</center>
+
+<p>
+As above, we use the unmarked blue circle to indicate the default
+configuration, and embellish a swap automorphism with the
+graphs we are exchanging.
+Knowing when two graphs are equivalent also has many applications in
+combinatorial optimization.
+</p>
+
+<p>
+At this point, there is good news and bad news.
+The good news is that finding the automorphism group of a graph can be viewed as
+as hidden subgroup problem, so we might hope to solve it efficiently
+with a quantum computer.
+The bad news is that, because the groups is not abelian, the problem
+is much harder.
+In fact, in the worse case it is not solvable using our sampling subroutine at
+all!
+In order to understand how to modify our sampling algorithm, and
+what it actually samples, we not only need more group theory, but a
+matrix-valued generalization of characters called
+<i>representations</i>.
+</p>
+
+<quote>
+<p>
+<b>2.1. Graph automorphism and isomorphism problems.</b></a>
+A <i>graph</i> $\Gamma = (V, E)$ is a set of <i>vertices</i> $V$ and
+<i>edges</i> $E \subseteq V \times V$.
+The <i>automorphism group</i> $\text{Aut}(\Gamma)$ consists of all
+invertible maps $\pi: V \to V$ such that $\pi(E) = E$. Two graphs
+$\Gamma = (V, E)$ and $\Gamma' = (V', E')$ are <i>isomorphic</i> if
+there is an invertible map $\pi: V \to V'$ such that $\pi(E) =
+E'$. The <i>graph
+automorphism problem</i> is to determine $\text{Aut}(\Gamma)$ from
+$\Gamma$, and the <i>graph isomorphism problem</i> is to determine if
+$\Gamma$ and $\Gamma'$ are isomorphic.
+</p>
+</quote>
+
+
+<h3><a id="group-II"></a> <a href="#toc">2.2</a>. Group theory
+(II)</h3></a>
+
+<p>
+To recast graph symmetries as a HSP, we need to define the
+<b>symmetric group</b> $S_n$ on $n$ objects. Let $[n] = \{1, 2, \ldots, n\}$
+denote the first $n$ positive integers. We'll abuse notation and use
+$S_n$ both for the set of
+<b>permutations</b> of $[n]$,
+$$
+S_n = \{\pi: [n] \to [n]: \pi \text{ is invertible}\}, \tag{18}
+$$
+and this set equipped with the group operation of function composition.
+If we label vertices in our graph<label for="sn-0" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-0" class="margin-toggle" />
+<span class="sidenote">Otherwise it is <i>isomorphic</i> to a subgroup of
+$S_n$. This is an annoying technicality we simply avoid by
+labelling with numbers.
+</span>elements of $[n]$, so $V = [n]$, then the automorphism group
+$H = \text{Aut}(\Gamma) \leq S_{n}$.
+</p>
+
+<p>
+Before moving on, we introduce the handy <b>cycle notation</b> for
+dealing with permutations.
+The idea is simply to start with $1$, see where it goes, and keep
+going until it loops back to $1$. If it consists of $\ell$ elements, we
+call it a <b>$\ell$-cycle</b>. We draw the $3$-cycle $(1, 2, 3)$ below:
+</p>
+
+<center>
+<img src="src/perm1.svg" alt="perm1" style="width:150px; margin-right:-50px">
+</center>
+
+<p>
+More explicitly, this corresponds to a permutation $\pi: [3] \to [3]$ such that
+$$
+\pi(1) = 2, \quad \pi(2) = 3, \quad \pi(3) = 1.
+$$
+Permutations generally consist of multiple cycles, so we enclose
+them with parentheses and concatenate.
+For instance, the permutation $\pi: [8] \to [8]$ below
+</p>
+
+<center>
+<img src="src/perm2.svg" alt="perm1" style="width:300px; margin-right:-50px">
+</center>
+
+<p>
+is denoted by $\pi = (1, 2, 8)(3, 7)(4, 6)(5)$.
+In general, we can write $\pi \in S_n$ as a product of $\ell_i$-cycles,
+$$
+\pi = \prod_{i=1}^C (a^{i}_1, a^i_2, \ldots, a^i_{\ell_i}), \tag{19}
+$$
+where each cycle $ (a^{i}_1, a^i_2, \ldots, a^i_{\ell_i})$ indicates a
+subset $\{a^i_j\}_{j=1}^{\ell_i} \subseteq [n]$ cyclically permuted by
+$\pi$.</p>
+
+<p>
+To compose permutations, we pick an element and trace its arrows
+through the cycles.
+To illustrate, let's compose the $\pi$ above with an $8$-cycle $\pi' =
+(1,3,6,2,7,8,5,4)$. To see what happens to $1$ in the permutation
+$\pi' \circ \pi$, we "trace" the path of $1$ through the permutations,
+remembering that the rightmost map is applied first:
+</p>
+
+<center>
+<img src="src/perm3.svg" alt="perm3" style="width:520px; margin-right:-50px">
+</center>
+
+<p>
+First, $1$ is mapped to $2$ by $\pi$, then $2$ is mapped to $7$ by $\pi'$, so
+$1$ gets mapping to $7$, $\pi' \circ \pi(1) = 7$. The cycle notation
+equivalent is</p>
+
+<center>
+<img src="src/perm4.svg" alt="perm4" style="width:200px; margin-right:-50px">
+</center>
+
+<p>
+Tracing the path of
+the remaining elements of $[8]$, we find
+$$
+\pi' \circ \pi = (1, 7, 6) (2, 5, 4) (3, 8).
+$$
+We now have a language for discussing the group $G = S_n$ and the
+subgroup $H = \text{Aut}(\Gamma)$ of interest.
+The fact that the group is nonabelian (illustrated for the symmetric
+group $S_3$ on the triangle above) means that there are actually two
+notions of coset. For a general group $(G, \cdot)$ and subgroup $H
+\leq G$, define the <b>left cosets</b> by
+$$
+G/H = \{g \cdot H : g \in G\}, \tag{20}
+$$
+and the <b>right cosets</b> by
+$$
+H\backslash G = \{H \cdot g : g \in G\}.
+$$
+From now on, we will be lazy and omit the "$\cdot$" for a general group.
+</p>
+
+<center>
+<img src="src/perm5.svg" alt="perm5" style="width:500px; margin-right:-50px">
+</center>
+
+<p>
+Let's check how left and right cosets work in our simple
+example, $S_3$.
+Take $H = \{\text{id}, (1, 2)\}$, displayed above left, where $\text{id}$ denotes the identity
+map, $\text{id}(j) = j$ for $j \in [3]$.
+A $2$-cycle like $(1, 2)$ is usually called a <b>transposition</b> or
+<b>swap</b>, and since swaps are their own inverse, $H$ forms a
+legitimate subgroup.
+The left coset of $(2, 3)$ is
+$$
+(2, 3) \circ H = \{(2, 3), (2, 3) \circ (1, 2)\} = \{(2, 3), (1, 3, 2)\},
+$$
+while the right coset is
+$$
+H\circ (2, 3) = \{(2, 3), (1, 2) \circ (2, 3)\} = \{(2, 3), (1, 2, 3)\}.
+$$
+The inequivalence of left and right cosets here
+boils down to the fact that swaps do not always commute.
+But the converse doesn't hold, i.e. non-commuting elements do not
+imply that left and right cosets are always different.
+To see this, set $K = \{\text{id}, (1, 2, 3), (1,
+3, 2)\}$, shown above right.
+The left and right cosets of $(2, 3)$ are now the same:
+$$
+\begin{align*}
+(2, 3) \circ K & = \{(2, 3), (2, 3) \circ (1, 2, 3), (2, 3) \circ (1,
+3, 2)\}\\
+& = \{(2, 3), (1, 3), (1, 2) \circ (1, 3, 2)\}\\
+& = \{(2, 3), (1, 2, 3) \circ (2, 3), (1,
+3, 2) \circ (2, 3)\}\\
+& =K \circ (2, 3).
+\end{align*}
+$$
+The same is true for any swap, and for either  $3$-cycle $\pi$ we
+have $\pi \circ K = K \circ \pi = K$.
+Thus, all left and right cosets for this subgroup coincide, and we call $K$
+<b>normal</b>. We can think of normal subgroups as those which commute
+with all group elements, since
+$$
+G/K = K\backslash G \quad \Leftrightarrow \quad g K = K
+g. \tag{21}\label{norm1}
+$$
+Normal subgroups turn out to be very important for a simple reason:
+they are the subgroups for which the quotient $G/K$ is a group!
+If we want to define a natural product on cosets $gK, g'K$, we need to
+be able to pull group elements through $H$, i.e. for all $g, g' \in G$
+we want
+$$
+(gK)(g'K) = (gg')K.
+$$
+Otherwise, $g'$ might get "stuck" on the other side. As an example, we
+would like the product of the swap coset $(2, 3) \circ H$ with
+itself to give the identity coset $H$, since the swap is its own
+inverse. Instead, the product is
+$$
+\begin{align*}
+((2, 3) \circ H)\circ ((2, 3) \circ H_1) & = \{(2, 3), (1, 3, 2)\} \circ
+\{(2, 3), (1, 3, 2)\} \\
+& = \{\text{id}, (1, 2), (1, 3), (1, 2, 3)\} \\
+& \neq H.
+\end{align*}
+$$
+This is no longer even a coset! There is a nice way to understand when
+a group is normal. We can rewrite $(\ref{norm1})$ as
+that for all $g \in G$,
+$$
+g K = Kg \quad \Leftrightarrow \quad gKg^{-1} = K. \tag{22}\label{norm2}
+$$
+This means that normal subgroups are precisely the subgroups that are invariant
+under the map $\varphi_a(g) = aga^{-1}$, called <b>conjugation</b>, for all $a \in G$.
+If $g' = \varphi_a(g)$ for some $a$, we say that $g$ and $g'$ are
+<b>conjugate</b>, and conjugacy forms an
+equivalence relation<label for="sn-0" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-0" class="margin-toggle" />
+<span class="sidenote">
+The conditions of reflexivity, symmetry and transitivity correspond
+precisely to the group axioms of identity, inverses and associativity,
+as we leave the diligent reader to check.
+</span> on $G$. The equivalence classes are called <b>conjugacy
+classes</b>,
+$$
+\text{Cl}(g) = \{ag a^{-1} : a \in G\},\tag{23}
+$$
+and they are the smallest subsets invariant under conjugation.
+Since a normal group is also invariant under conjugation, it must be a
+union of conjugacy classes:
+$$
+K = \bigcup_{k \in K}\text{Cl}(k). \tag{24} \label{norm-conj}
+$$
+To prove this, we just note that if $k \in K$, then $\text{Cl}(k) \subseteq K$ by closure.
+Equation $(\ref{norm-conj})$ is a practical condition for normality when we know what
+the conjugacy classes look like.
+</p>
+
+<center>
+<img src="src/perm6.svg" alt="perm6" style="width:500px; margin-right:-50px">
+</center>
+
+<p>
+The symmetric group $S_n$ furnishes a particularly beautiful and
+useful example.
+If we view elements $\pi \in S_n$ as <i>relabelling</i> the elements
+of $[n]$, then $\varphi_\pi$ maps a permutation $\pi'$ to the same
+permutation under relabelling. Put differently, if $\pi': j \mapsto k$, then
+$\varphi_\pi(\pi'): \pi(j) \mapsto \pi(k)$, since
+$$
+\varphi_\pi(\pi')(\pi(j)) = (\pi \circ \pi' \circ \pi^{-1})(\pi(j)) =
+\pi \circ \pi'(j) = \pi(k).
+$$
+In the figure above, we conjugate a swap by a $3$-cycle which labels
+purple with green. Thus, in the conjugated version, the purple
+$1$-cycle has been replaced by a green $1$-cycle.
+In general, the only thing that isn't affected by arbitrary
+relabellings is the <b>cycle structure</b>. For instance, a swap under
+conjugation swaps relabelled elements, so it is always a swap, which
+we indicate above by "greying out" nodes.
+The cycle structure of a more complicated permutation, like
+$$
+\pi = (1, 7, 6) (2, 5, 4) (3, 8),
+$$
+is just the set of cycle sizes $\{3, 3, 2\}$. In turn, these are in
+one-to-one correspondence with <b>partitions</b> of $n$, namely ways
+of writing $n$ as a sum of positive integers. Here,
+$$
+8 = 3 +  3 + 2.
+$$
+We can draw partitions using stacks of blocks called <b>Young tableaux</b>, arranged in order of
+decreasing size:
+</p>
+
+<center>
+<img src="src/perm7.svg" alt="perm7" style="width:480px; margin-right:-50px">
+</center>
+
+<p>
+These innocuous-looking boxes will come back to haunt us later.
+Clearly, any two permutations with the same cycle structure can be
+mapped to each other by an appropriate relabelling, so integer
+partitions characterize the conjugacy classes of $S_n$ completely.
+As a simple application, we can see that the
+subgroups of $S_3$ we encountered earlier,
+$$
+K = \{\text{id}, (1, 2, 3), (1, 3, 2)\} , \quad H = \{\text{id}, (1, 2)\},
+$$
+are normal and not normal, respectively, since the latter does not
+contain all swaps, but the former contains all $3$-cycles and
+$1$-cycles, and hence is a union of conjugacy classes.
+Let's summarize what we've learned so far:
+</p>
+
+<quote>
+<p>
+<b>2.2. Group theory (II).</b></a>
+In a nonabelian group $G$, multiplication does not commute.
+This means the <i>left</i> and <i>right cosets</i>
+$$
+G/H = \{g \cdot H : g \in G\}, \quad
+H\backslash G = \{H \cdot g : g \in G\},
+$$
+of a subgroup $H \leq G$ need not coincide.
+When they do coincide, we say that $H$ is <i>normal</i>.
+This implies $aHa^{-1} = H$ for all $a \in G$, or qquivalently, $H$ is
+invariant under <i>conjugation</i>:
+$$
+g \mapsto \varphi_a(g) = aga^{-1}.
+$$
+In this case, the cosets form a group.
+If $g = ag'a^{-1}$ for some $a$, $g$ and $g'$ are
+<i>conjugate</i>. Conjugacy is an equivalence relation on $G$ whose
+equivalence classes are <i>conjugacy classes</i>,
+$\text{Cl}(g)$. Normal subgroups are unions of conjugacy classes. <br>
+<br>
+
+The <i>symmetric group</i> $S_n$ is the set of invertible maps or <i>permutations</i> $\pi:
+[n] \to [n]$ on the first $n$ positive integers, $[n]= \{1, 2,
+\ldots, n\}$, with function composition the group operation.
+Permutations can be written as products of <i>$\ell_i$-cycles</i>,
+$$
+\pi = \prod_{i=1}^C (a^{i}_1, a^i_2, \ldots, a^i_{\ell_i}),
+$$
+where each cycle $ (a^{i}_1, a^i_2, \ldots, a^i_{\ell_i})$ indicates a
+subset $\{a^i_j\}_{j=1}^{\ell_i} \subseteq [n]$ cyclically permuted by
+$\pi$.
+The conjugacy classes are characterized entirely by the <i>cycle
+structure</i>, i.e. the cycle lengths $\ell_i$.
+These cycle lengths in turn are simply <i>partitions</i> of $n$,
+which we can visually represent as stacks of boxes called <i>Young tableaux</i>.
+</p>
+</quote>
+
+<h3><a id="gen-nonabe"></a> <a href="#toc">2.3</a>. Nonabelian hidden
+subgroups</h3></a>
+
+<p>
+Having bitten off a big chunk of group theory, we can get back to our
+original problem.
+As with period finding and the general abelian HSP, let's encode $H
+\leq G$, for a finite nonabelian group, into a function $f: G \to S$ which is
+constant (and one-to-one) on left cosets<label for="sn-10" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-10" class="margin-toggle" />
+<span class="sidenote">
+We could choose right cosets instead, but we'll stick with
+left. 
+</span> of $H$:
+$$
+f(g) = f(g') \quad \text{if and only if} \quad g = g' H.
+$$
+Let's try to repeat the steps that worked in the abelian case and see
+what happens.
+We have two registers, $\mathcal{H}_G$ and $\mathcal{H}_S$, and start
+in the uniform superposition
+$$
+|\Psi_0\rangle = \frac{1}{\sqrt{|G|}}\sum_{g\in G}|g, 0\rangle.
+$$
+Assuming the function is encoded into an oracle $U_f$, we then make a
+single call:
+$$
+|\Psi_f\rangle = \frac{1}{\sqrt{|G|}}\sum_{g\in G}|g, f(g)\rangle =
+\frac{1}{\sqrt{|G|}}\sum_{g\in G}|g, f(g)\rangle.
+$$
+As in the abelian case, we can rewrite this as a sum
+over $h\in H$ and representatives $r \in R$:
+$$
+|\Psi_f\rangle = 
+\frac{1}{\sqrt{|G|}}\sum_{r\in R}\sum_{h\in H}|rh, f(r)\rangle.
+$$
+If we trace out the second register, we obtain a sum of coset states
+$$
+\rho_f = \frac{1}{|R|} \sum_{r \in R} |rH\rangle\langle rH|, \quad
+|rH\rangle = \frac{1}{\sqrt{|H|}}\sum_{h\in H} |rh\rangle. \tag{25}\label{nonabe-rho}
+$$
+So far, so good. The hurdle is when we go to apply the QFT!
+Earlier, we used the fact that the shift matrices $P_s |x\rangle = |x
++ s\rangle$ commuted, and hence could be simultaneously diagonalized,
+with eigenstates $|\chi\rangle$.
+This means that in the Fourier basis, each shift matrix
+$P_s$ takes the form
+$$
+P_s =
+\begin{bmatrix}
+\chi_0(s) & & & \\
+&  \chi_1(s) & & \\
+&  & \ddots & \\
+&  & & \chi_{N-1}(s) 
+\end{bmatrix},\tag{26}\label{P_s-matrix}
+$$
+where for concreteness we've labelled characters with integers in
+$\mathbb{Z}_N$.
+In this basis, $\rho_f$ was diagonal, and we could evaluate the
+probability $\hat{p}_y$ of observing a state $|\chi_y\rangle$.
+</p>
+
+<center>
+<img src="src/diag1.svg" alt="diag1" style="width:400px; margin-right:-50px">
+</center>
+
+<p>
+Now, however, the group operation is not commutative, so we cannot
+simultaneously diagonalize the operators implementing the group
+operation; this also means we cannot diagonalize $\rho_f$.
+The best we can do is <i>block</i> diagonalize.
+To make this precise, define the <b>left multiplication</b> and
+<b>right multiplication</b> operators by
+$$
+L_a |g\rangle = |ag\rangle, \quad R_b |g\rangle = |gb\rangle. 
+$$
+We'll focus on left multiplication for now.
+By analogy to $(\ref{P_s-matrix})$, we want some basis which jointly
+block-diagonalizes the $L(a)$ for all $a \in G$:
+$$
+L_a =
+\begin{bmatrix}
+\rho^{(1)}(a) & & & \\
+&  \rho^{(2)}(a) & & \\
+&  & \ddots & \\
+&  & & \rho^{(B)}(a)
+\end{bmatrix}. \tag{27} \label{L_a}
+$$
+Such a basis always exists, since a single block is trivially
+block-diagonal.
+These have a property, analogous to characters, they they turn the
+group operation into multiplication, but now of matrices rather than
+numbers. To check, note that
+$$
+L_a L_b |g\rangle = |a(bg)\rangle = |(ab)g\rangle = L_{ab}|g\rangle.
+$$
+Thus, $L_{ab} = L_a L_b$ and from $(\ref{L_a})$ we have
+$$
+\begin{align*}
+\begin{bmatrix}
+\rho^{(1)}(ab) & & \\
+& \ddots & \\
+& & \rho^{(B)}(ab)
+\end{bmatrix} & =
+\begin{bmatrix}
+\rho^{(1)}(a) & & \\
+& \ddots & \\
+& & \rho^{(B)}(a)
+\end{bmatrix}
+\begin{bmatrix}
+\rho^{(1)}(b) & & \\
+& \ddots & \\
+& & \rho^{(B)}(b)
+\end{bmatrix} \\
+& =
+\begin{bmatrix}
+\rho^{(1)}(a) \rho^{(1)}(b) & & \\
+& \ddots & \\
+& & \rho^{(B)}(a) \rho^{(B)}(b)
+\end{bmatrix},
+\end{align*}
+$$
+or reading off the diagonal:
+$$
+\rho(ab) =\rho(a) \rho(b) \tag{28} \label{rep}
+$$
+for any block $\rho$.
+Each block satisfying this constraint is called a <b>representation</b>.
+Even if we can't diagonalize, we would like to make our blocks as small as possible.
+As we show in <a href="#pont">Appendix B</a>, this is a well-defined
+goal, resulting in a unique family of
+smallest blocks $\sigma \in \Sigma$, where block $\sigma$ has dimension $d_\sigma \times
+d_\sigma$.
+The $\sigma$ are called <b>irreducible
+representations (irreps)</b> since they are representations and cannot be
+made smaller.
+
+</p>
+
+<center>
+<img src="src/diag2.svg" alt="diag2" style="width:550px; margin-right:-50px">
+</center>
+
+<p>
+It is helpful to think of irreps as a matrix-valued generalization of
+the characters $\chi$ from the abelian case.
+In particular, this helps us define the nonabelian QFT.
+In the abelian case, acting on computational basis elements with $F_G$ creates
+<b>insertion states</b> $F_G|x\rangle = |\iota_x\rangle$, as discussed
+further in <a href="#pont">Appendix A</a>.
+These insert $x$ into an overlapped character:
+$$
+\langle \chi |F_G| x\rangle = \langle \chi | \iota_x\rangle = \frac{1}{\sqrt{|G|}}\chi(x).
+$$
+This immediately generalizes to a nonabelian group, where we define
+$F_G$ as mapping $|g\rangle$ to an insertion state which,
+overlapped with $|\sigma\rangle$, produces a matrix:
+$$
+\langle \sigma |F_G| g\rangle = \langle \sigma |\iota_g\rangle =
+\frac{1}{\sqrt{|G|}}\sigma(g). \tag{29} \label{nonabe-iota1}
+$$
+This is an operator, but we can map to a dual state
+via the usual <b>Choi isomorphism</b>:
+$$
+\sigma(g) \mapsto |\sigma(g)\rangle = (\sigma(g)\otimes I_{d_\sigma})
+|\Phi\rangle = (I_{d_\sigma }\otimes \sigma(g)^T) |\Phi\rangle, \tag{30}
+$$
+where $ |i\rangle_\sigma$, $i = 1, 2, \ldots, d_\sigma$, spans the
+vector space on which the $\sigma(g)$ act, and
+$$
+|\Phi\rangle = \frac{1}{\sqrt{d_\sigma}} \sum_{i=1}^{d_\sigma}
+|i\rangle_\sigma \otimes |i\rangle_\sigma
+$$
+is the maximally entangled state.<label for="sn-14" class="margin-toggle sidenote-number">
+</label>
+<input type="checkbox" id="sn-14" class="margin-toggle" />
+<span class="sidenote">
+A nice feature of the state $|\Phi\rangle$ is that $(M \otimes
+I_{d_\sigma})|\Phi\rangle =(I_{d_\sigma} \otimes M^T)|\Phi\rangle$ for
+any operator $M$,
+which we use in the definition of the Choi dual. This property of
+$|\Phi\rangle$ is left
+as an exercise.
+</span>
+The defining property of representations $(\ref{rep})$ becomes
+$$
+|\sigma(ab)\rangle = (\sigma(ab)\otimes I_{d_\sigma})|\Phi\rangle =
+(\sigma(a)\otimes I_{d_\sigma})|\sigma(b)\rangle. \tag{31}
+$$
+This means that left multiplication $L_a$ just acts as matrix
+multiplication $\sigma(a)\otimes I_{d_\sigma}$ in each block
+$\sigma$, and similarly, $R_b$ acts as $I_{d_\sigma} \otimes
+\sigma(b)^T$.
+</p>
+
+<p>
+Let's return 
+</p>
+
+<h3><a id="rep-II"></a> <a href="#toc">2.4</a>. Representation theory
+(II)</h3></a>
+
+<h2><a id="refs">References</h2></a><hr>
+
+<ol>
+  <li> <a id="algobra"><a href="https://arxiv.org/pdf/0812.0380.pdf">"Quantum algorithms for algebraic problems" </a> (2010), Andrew
+  Childs, Wim van Dam. <i>Reviews of Modern Physics 82, 1-52.</i></a>
+  <li> <a id="shor">"Polynomial-time algorithms for prime factorization and discrete logarithms on a quantum computer"
+  (1997), Peter Shor. <i>SIAM Journal on Computing 26(5).</i></a>
+</ol>
+
+<h2><a id="pont"></a> <a href="#toc">A</a>. Abelian duals</a></h2><hr>
+
+<p>
+In this appendix, we'll show that for abelian groups, (I) the
+annihilator of $H \leq G$ is isomorphic to
+the character group of the quotient, $H^* \cong \widehat{G/H}$; and
+(II) finite abelian groups are isomorphic to their duals, $G \cong \hat{G}$. Combining these gives $H^* \cong G/H$.
+</p>
+
+<proof><p> <i>Proof.</i>
+(I) For the first part, define a map $\phi: H^* \to \widehat{G/H}$ which takes an
+annihilator $\chi \in H^* \leq \hat{G}$ to a character of $G/H$ as follows:
+$$
+\phi [\chi](x + H) = \chi(x).
+$$
+This is well-defined since if $x$ and $y$ are in the same coset, $x =
+y + h$ and hence
+$$
+\phi [\chi](x + H) = \chi(x) =\chi(y + h) = \chi(y)\chi(h) = \chi(y) =
+\phi [\chi](y + H),
+$$
+using the fact that $\chi$ annihilates $H$, i.e. $\chi(h) = 1$.
+The map $\phi$ is in fact an isomorphism. We can easily check it is a
+homomorphism, since
+$$
+\phi[\chi \cdot \chi'](x + H) = \chi(x)\chi'(x) = \phi[\chi](x +
+H)\cdot  \phi[\chi'](x + H).
+$$
+It remains to check $\phi$ is bijective. Let $R$ be a set of coset
+representatives.
+It is surjective since, for any
+character $\sigma \in \widehat{G/H}$, we can define $\chi_\sigma \in
+H^*$ by
+$$
+\chi_\sigma(r + h) = \chi_\sigma(r) = \phi[\chi_\sigma](r + H) = \sigma(r + H).
+$$
+It's easy to check that $\chi_\sigma$ is indeed a character.
+The map $\phi$ is also injective since, if $\phi[\chi] = \phi[\chi']$,
+then for all $r \in R$,
+$$
+\phi[\chi](r + H) = \phi[\chi'](r + H) \quad \Leftrightarrow \quad
+\chi(r) = \chi'(r) \quad \Leftrightarrow \quad \chi(r + h) = \chi'(r +
+h),
+$$
+using the fact that $\chi, \chi' \in H^*$.
+Thus, $\phi$ is an isomorphism and hence $H^* \cong
+\widehat{G/H}$.
+</p> </proof>
+
+<p>
+Before part (II), we need a few additional
+group-theoretic ingredients.
+The <b>direct product</b> of groups $G$ and $G'$ defines a natural
+group on the Cartesian product $G \times G'$:
+$$
+(g_1, g_1') + (g_2, g_2') = (g_1 + g_2, g_1' + g_2').
+$$
+The characters of the direct product are just a direct product of
+characters, i.e. $\widehat{G \times G'} = \hat{G}\times \hat{G'}$.
+It's easy to perform a sanity check that
+$$
+(\chi, \chi')(g_1 + g_2, g_1' + g_2') = (\chi, \chi')(g_1, g_1')\cdot (\chi, \chi')(g_2, g_2'),
+$$
+so $\hat{G}\times \hat{G'} \subseteq \widehat{G \times G'}$, and a
+cardinality argument shows they must be the same.
+We also require a structural classification result called the <a
+href="https://proofwiki.org/wiki/Fundamental_Theorem_of_Finite_Abelian_Groups">Fundamental
+Theorem of Finite Abelian Groups</a>. This states that every finite
+abelian group $G$ is isomorphic to a direct product of cyclic groups:
+$$
+G \cong \mathbb{Z}_{N_1} \times \mathbb{Z}_{N_2} \times \cdots \times
+\mathbb{Z}_{N_k}.
+$$
+This lets us transform arbitrary abelian groups into modular arithmetic.
+</p>
+
+<proof><p> <i>Proof (continued).</i>
+(II) The second step in the proof is to show that finite abelian groups are
+isomorphic to their duals, and hence $\widehat{G/H} \cong G/H$.
+We first look at the cyclic case $\mathbb{Z}_N$. Recall that we could
+explicitly write down the characters:
+$$
+\langle \chi_y|x\rangle = \frac{1}{\sqrt{N}}\omega_N^{xy} \quad
+\Longrightarrow \quad \chi_y(x) = \omega_N^{xy}.
+$$
+This provides a map $\varphi: G \to \hat{G}$, defined by
+$$
+\varphi[s](x) = \chi_s(x) = \omega_N^{sx}.
+$$
+This is a homomorphism:
+$$
+\varphi[s + s'](x) = \omega_N^{(s + s')x} = \varphi[s] \cdot \varphi[s'](x).
+$$
+It is surjective by construction, and injective since
+$$
+\varphi[s] = \varphi[s'] \quad \Leftrightarrow \quad \omega_N^{sx} =
+\omega_N^{s'x} \text{ for all } x\quad \Leftrightarrow \quad s = s' \text{ mod }N.
+$$
+Thus, it is an isomorphism, so we learn that $\widehat{\mathbb{Z}_N}
+\cong \mathbb{Z}_N$.
+To complete the proof, we invoke the Fundamental Theorem. Since (as we've just shown) cyclic groups are isomorphic to their duals, and the
+dual of a direct product is a direct product of duals,
+the result follows.
+◾ </p> </proof>
+
+<p>
+This proof is unavoidably ugly since there is no "natural"
+correspondence between $G$ and its dual $\hat{G}$; we cannot find an
+isomorphism without invoking the heavy machinery of the Fundamental
+Theorem.
+We ran into this ugliness earlier, in a different guise: the arbitrary
+labelling $y \mapsto \chi_y$.
+</p>
+
+<p>
+However, there <i>is</i> a natural correspondence between $G$ and its
+<i>double dual</i> $\hat{\hat{G}}$, called
+<a
+href="https://en.wikipedia.org/wiki/Pontryagin_duality"><b>Pontryagin
+duality</b></a>.
+We'll introduce this in a low-tech way.
+Earlier, we defined the QFT $F_G$ as an active basis change from $|\chi_y\rangle$ to
+$|y\rangle$.
+Equivalently, the matrix of $F_G$ is
+$$
+\langle y| F_G|x\rangle = \frac{1}{\sqrt{|G|}}\langle\chi_y| x\rangle = \chi_y(x).
+$$
+The rows encode characters $\langle y| F_G = \langle \chi_y|$.
+Pontryagin duality is the observation that we can work with the column
+vectors $F_G|x\rangle =|\iota_x\rangle$ instead.
+We call these <b>insertion
+states</b>, since their overlaps insert $x$ into the corresponding character:
+$$
+\langle \chi| F_G|x\rangle = \langle \chi|\iota_x\rangle = \frac{1}{\sqrt{|G|}}\chi(x). \tag{16} \label{iota}
+$$
+We can now consider the characters on the left as being selected from
+$\hat{G}$ without an arbitrary labelling $\chi_y$.
+This will become important when we consider
+nonabelian groups in §<a href="#gen-nonabe">2.3</a>, since in the
+nonabelian case there is no longer an isomorphism between $G$ and $\hat{G}$.
+</p>
+
+<h2><a id="blocks"></a> <a href="#toc">B</a>. Chopping blocks</a></h2><hr>
+
+  </body>
+</html>
+
+EXTRA
+
+Technically, it should produce a scalar <i>matrix element</i> rather
+than a matrix. Each block, labelled by an irrep $\sigma$, will be a
+$d_\sigma \times d_\sigma$ matrix, so we can set up a Hilbert space
+$\mathcal{H}_\sigma$ for this block with basis $|i\rangle_\sigma
+\otimes |j\rangle_\sigma = |ij\rangle_\sigma$, for $i,j
+=1, \ldots, d_\sigma$. The original Hilbert space $\mathcal{H}_G$ is
+the direct sum of these blockwise spaces:
+$$
+\mathcal{H}_G = \bigoplus_{\sigma \in \Sigma} \mathcal{H}_\sigma =
+\bigoplus_{\sigma \in \Sigma} \mathcal{H}_{d_\sigma} \otimes \mathcal{H}_{d_\sigma}.
+$$
+In the block-diagonal basis,
+$$
+\langle ij |_\sigma F_G| g\rangle = \langle
+i j |_\sigma|\iota_g\rangle =
+\frac{1}{\sqrt{d_\sigma}}\sigma_{ij}(g), \tag{30} \label{nonabe-iota2}
+$$
+where the prefactor is required to ensure the result is normalized.
+Equivalently, we can replace $\sigma(g)$ in $(\ref{nonabe-iota1})$
+with the <b>Choi dual</b> state
+$$
+|\sigma(g)\rangle = (\sigma(g) \otimes I_{d_\sigma}) \frac{1}{\sqrt{d_\sigma}} \sum_{j=1}^{d_\sigma}
+|jj\rangle_\sigma = \frac{1}{\sqrt{d_\sigma}} \sum_{i,j=1}^{d_\sigma}
+\sigma_{ij}(g)|ij\rangle_\sigma.
+$$
+The defining property of representations $(\ref{rep})$ becomes
+$$
+|\sigma(ab)\rangle = \frac{1}{\sqrt{d_\sigma}} \sum_{i,j=1}^{d_\sigma}
+\sigma_{ij}(ab) |ij\rangle_\sigma
+= \frac{1}{\sqrt{d_\sigma}} \sum_{i,j,k=1}^{d_\sigma}
+(\sigma_{ik}(a)
+|i\rangle_\sigma)\otimes(\sigma_{kj}(b)|j\rangle_\sigma)
+$$
+and hence
+$$
+|\sigma(ab)\rangle = (\sigma(a) \otimes I_{d_\sigma})
+|\sigma(b)\rangle = (I_{d_\sigma} \otimes \sigma(b))
+|\sigma(a)\rangle.
+$$
+This tell us how to perform left and right multiplication in the
+block-diagonal basis:
+$$
+F_G L_a F_G^\dagger = \bigoplus_{\sigma\in\Sigma} (\sigma(a) \otimes
+I_{d_\sigma}), \quad F_G R_b F_G^\dagger = \bigoplus_{\sigma\in\Sigma}
+( I_{d_\sigma} \otimes \sigma(b)). \tag{31}
+$$
+This is analogous to the fact that the characters diagonalize the
+shift matrices $P_s$ in the abelian case.
+Instead, we block-diagonalize left and right multiplication, but with
+the smallest possible blocks. We picture this for left multiplication below.
+</p>
+
+<center>
+<img src="src/diag3.svg" alt="diag3" style="width:450px; margin-right:-50px">
+</center>
+
+<p>
+We can now return to our quantum algorithm.
+The density $(\ref{nonabe-rho})$ is invariant under left
+multiplication, since this simply permutes the coset states in the
+sum, and hence $L_a \rho_f L_a^\dagger$.
+Hence, expanding in the Fourier basis,
+$$
+\begin{align*}
+\rho_f & = \bigoplus_{\sigma, \sigma' \in \Sigma}
+\sum_{i,j=1}^{d_\sigma}\sum_{i',j'=1}^{d_{\sigma'}} c_{\sigma\sigma',
+ij}^{i'j'}|ij\rangle_\sigma \langle i'j'|_{\sigma'} \\ 
+\Longrightarrow \quad L_a \rho_fL_a^\dagger & = \bigoplus_{\sigma, \sigma' \in \Sigma}
+\sum_{i,j=1}^{d_\sigma}\sum_{i',j'=1}^{d_{\sigma'}} c_{\sigma\sigma',
+ij}^{i'j'}(\sigma(a) \otimes I_{d_{\sigma}})|ij\rangle_\sigma \langle
+i'j'|_{\sigma'}(\sigma'(a)^\dagger \otimes I_{d_{\sigma'}}).
+\end{align*}
+$$
+These matrices can only leave $\rho_f$ invariant for all $a \in G$ if $\sigma(a)$ and
+$\sigma'(a)$ are in the same block, i.e. $\sigma = \sigma'$.
+Let $\Pi_\sigma$ denote the projector onto the $\sigma$ block.
+If we measure in the Fourier basis (TODO), the probability of observing an irrep
+$\sigma$ is
+$$
+\hat{p}_\sigma = \mbox{Tr}[\hat{\rho}_f \Pi_\sigma] =
+\frac{1}{|G|}\sum_{r\in R, h, h'\in H}|rh\rangle\langle rh'|.
+$$
+When we measure, the probability of observing $\sigma$
+</p>
